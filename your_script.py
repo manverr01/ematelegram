@@ -3,22 +3,25 @@ import pandas as pd
 import time
 import telebot
 
-# Initialize Binance Futures API
-binance = ccxt.binance({"options": {"defaultType": "future"}})
+# Initialize Binance US API
+binance = ccxt.binanceus()
 
-# Telegram Bot Token
+# Telegram Bot Token (Keep this secure!)
 TELEGRAM_BOT_TOKEN = "8069024735:AAHD7z4RW0TjSBE9swxoTMQCoBOh4Hoo39Q"
 CHAT_ID = "796853882"
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
-def fetch_all_futures_pairs():
+def fetch_all_spot_pairs():
+    """Fetch all Binance US spot trading pairs."""
     markets = binance.load_markets()
-    return [symbol for symbol in markets if "/USDT" in symbol and markets[symbol].get("type") == "future"]
+    return [symbol for symbol in markets if "/USDT" in symbol]
 
 def fetch_ohlcv(symbol, timeframe='1h', limit=100):
+    """Fetch OHLCV data for a given symbol."""
     return binance.fetch_ohlcv(symbol, timeframe, limit=limit)
 
 def calculate_macd(df):
+    """Calculate MACD indicator."""
     df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
     df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
     df['macd'] = df['ema_12'] - df['ema_26']
@@ -27,11 +30,13 @@ def calculate_macd(df):
     return df
 
 def calculate_ema(df):
+    """Calculate EMA 9 and EMA 44."""
     df['ema_44'] = df['close'].ewm(span=44, adjust=False).mean()
     df['ema_9'] = df['close'].ewm(span=9, adjust=False).mean()
     return df
 
 def check_signal(symbol):
+    """Check for buy/sell signals based on MACD and EMA crossovers."""
     data = fetch_ohlcv(symbol)
     df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df = calculate_macd(df)
@@ -56,7 +61,8 @@ def check_signal(symbol):
     return None
 
 def monitor_pairs():
-    pairs = fetch_all_futures_pairs()
+    """Monitor all Binance US pairs and send Telegram alerts."""
+    pairs = fetch_all_spot_pairs()
     while True:
         for pair in pairs:
             try:
@@ -70,3 +76,4 @@ def monitor_pairs():
 
 if __name__ == "__main__":
     monitor_pairs()
+
