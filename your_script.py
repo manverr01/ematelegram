@@ -15,9 +15,11 @@ TELEGRAM_BOT_TOKEN = "8069024735:AAHD7z4RW0TjSBE9swxoTMQCoBOh4Hoo39Q"
 CHAT_ID = "796853882"
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
-# ✅ Cooldown Time (Avoid duplicate alerts) 
+# ✅ Cooldown Time (Avoid duplicate alerts)
 COOLDOWN_PERIOD = 900  # 15 minutes
 last_signal_time = {}
+
+TIMEFRAMES = ['1m', '3m', '5m', '15m', '1h', '4h']
 
 def fetch_all_usdt_pairs():
     """Fetch all Binance US spot trading pairs ending with /USDT."""
@@ -28,11 +30,11 @@ def fetch_all_usdt_pairs():
         print(f"Error fetching USDT pairs: {str(e)}")
         return []
 
-def check_signal(symbol):
+def check_signal(symbol, timeframe):
     """Check for EMA 9 / EMA 44 cross and MACD confirmation."""
     try:
         formatted_pair = symbol.replace("/", "")  # Convert AXS/USDT -> AXSUSDT
-        data = binance.fetch_ohlcv(formatted_pair, '15m', limit=300)  # 🔥 Increased limit to 300
+        data = binance.fetch_ohlcv(formatted_pair, timeframe, limit=300)
 
         if not data:
             return None
@@ -53,32 +55,34 @@ def check_signal(symbol):
 
         # ✅ Confirming EMA Cross with MACD Signal
         if prev_ema_9 < prev_ema_44 and curr_ema_9 > curr_ema_44 and df.iloc[-1]['macd'] > df.iloc[-1]['signal']:
-            return f"🚀 BUY Signal for {symbol} (EMA 9 crossed above EMA 44)"
+            return f"🚀 BUY Signal for {symbol} ({timeframe} EMA 9 crossed above EMA 44)"
         elif prev_ema_9 > prev_ema_44 and curr_ema_9 < curr_ema_44 and df.iloc[-1]['macd'] < df.iloc[-1]['signal']:
-            return f"⚠️ SELL Signal for {symbol} (EMA 9 crossed below EMA 44)"
+            return f"⚠️ SELL Signal for {symbol} ({timeframe} EMA 9 crossed below EMA 44)"
         return None
     except Exception as e:
-        print(f"Error checking {symbol}: {str(e)}")
+        print(f"Error checking {symbol} on {timeframe}: {str(e)}")
         return None
 
 def monitor_pairs():
     """Monitor all USDT pairs and send Telegram alerts."""
     while True:
-        pairs = fetch_all_usdt_pairs()  # ✅ Fetch all USDT pairs
+        pairs = fetch_all_usdt_pairs()
         if not pairs:
             print("No USDT pairs found. Retrying in 5 minutes...")
             time.sleep(300)
             continue
 
         for pair in pairs:
-            signal = check_signal(pair)
-            if signal:
-                current_time = time.time()
-                if pair in last_signal_time and (current_time - last_signal_time[pair]) < COOLDOWN_PERIOD:
-                    continue  # ✅ Skip if within cooldown
+            for timeframe in TIMEFRAMES:
+                signal = check_signal(pair, timeframe)
+                if signal:
+                    current_time = time.time()
+                    signal_key = f"{pair}_{timeframe}"
+                    if signal_key in last_signal_time and (current_time - last_signal_time[signal_key]) < COOLDOWN_PERIOD:
+                        continue  # ✅ Skip if within cooldown
 
-                bot.send_message(CHAT_ID, signal)
-                last_signal_time[pair] = current_time  # ✅ Update last signal time
+                    bot.send_message(CHAT_ID, signal)
+                    last_signal_time[signal_key] = current_time  # ✅ Update last signal time
 
         time.sleep(300)  # ✅ Re-check every 5 minutes
 
