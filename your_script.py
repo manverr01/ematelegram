@@ -32,7 +32,7 @@ def check_signal(symbol):
     """Check for EMA 9 / EMA 44 cross and MACD confirmation."""
     try:
         formatted_pair = symbol.replace("/", "")  # Convert AXS/USDT -> AXSUSDT
-        data = binance.fetch_ohlcv(formatted_pair, '15m', limit=100)  # 15-min timeframe
+        data = binance.fetch_ohlcv(formatted_pair, '15m', limit=300)  # 🔥 Increased limit to 300
 
         if not data:
             return None
@@ -45,14 +45,17 @@ def check_signal(symbol):
         df['macd'] = df['ema_12'] - df['ema_26']
         df['signal'] = df['macd'].ewm(span=9, adjust=False).mean()
 
-        # ✅ Trend confirmation based on EMA crossover
-        trend_direction = 'UP' if df.iloc[-1]['ema_9'] > df.iloc[-1]['ema_44'] else 'DOWN'
+        # ✅ EMA Cross Confirmation
+        prev_ema_9 = df.iloc[-2]['ema_9']
+        prev_ema_44 = df.iloc[-2]['ema_44']
+        curr_ema_9 = df.iloc[-1]['ema_9']
+        curr_ema_44 = df.iloc[-1]['ema_44']
 
-        # ✅ Buy/Sell Signal Confirmation
-        if df.iloc[-2]['macd'] < df.iloc[-2]['signal'] and df.iloc[-1]['macd'] > df.iloc[-1]['signal'] and trend_direction == 'UP':
-            return f"🚀 BUY Signal for {symbol}"
-        elif df.iloc[-2]['macd'] > df.iloc[-2]['signal'] and df.iloc[-1]['macd'] < df.iloc[-1]['signal'] and trend_direction == 'DOWN':
-            return f"⚠️ SELL Signal for {symbol}"
+        # ✅ Confirming EMA Cross with MACD Signal
+        if prev_ema_9 < prev_ema_44 and curr_ema_9 > curr_ema_44 and df.iloc[-1]['macd'] > df.iloc[-1]['signal']:
+            return f"🚀 BUY Signal for {symbol} (EMA 9 crossed above EMA 44)"
+        elif prev_ema_9 > prev_ema_44 and curr_ema_9 < curr_ema_44 and df.iloc[-1]['macd'] < df.iloc[-1]['signal']:
+            return f"⚠️ SELL Signal for {symbol} (EMA 9 crossed below EMA 44)"
         return None
     except Exception as e:
         print(f"Error checking {symbol}: {str(e)}")
