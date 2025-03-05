@@ -10,7 +10,7 @@ app = Flask(__name__)
 # Initialize Binance US API
 binance = ccxt.binanceus()
 
-# Telegram Bot Token (Keep this secure!)
+# Telegram Bot
 TELEGRAM_BOT_TOKEN = "8069024735:AAHD7z4RW0TjSBE9swxoTMQCoBOh4Hoo39Q"
 CHAT_ID = "796853882"
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
@@ -23,7 +23,13 @@ def fetch_all_spot_pairs():
 def check_signal(symbol):
     """Check for buy/sell signals based on MACD and EMA crossovers."""
     try:
-        data = binance.fetch_ohlcv(symbol, '1h', limit=100)
+        formatted_pair = symbol.replace("/", "")  # Convert BTC/USDT -> BTCUSDT
+        data = binance.fetch_ohlcv(formatted_pair, '1h', limit=100)
+        
+        if not data:
+            print(f"No data for {formatted_pair}")
+            return None
+        
         df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
         df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
@@ -40,16 +46,21 @@ def check_signal(symbol):
             return f"SELL Signal for {symbol}"
         return None
     except Exception as e:
-        return f"Error checking {symbol}: {str(e)}"
+        print(f"Error checking {symbol}: {str(e)}")
+        return None
 
 def monitor_pairs():
     """Monitor all Binance US pairs and send Telegram alerts."""
     pairs = fetch_all_spot_pairs()
+    print(f"Monitoring {len(pairs)} pairs...")
+
     while True:
         for pair in pairs:
             signal = check_signal(pair)
             if signal:
+                print(f"Sending signal: {signal}")
                 bot.send_message(CHAT_ID, signal)
+                time.sleep(2)  # Avoid hitting Telegram rate limits
         time.sleep(60)  # Check every minute
 
 @app.route("/")
@@ -57,8 +68,9 @@ def home():
     return "Trading Bot is Running!"
 
 if __name__ == "__main__":
-    # Start monitoring in a separate thread
-    threading.Thread(target=monitor_pairs, daemon=True).start()
+    # Start monitoring in a separate thread (not daemonized)
+    monitoring_thread = threading.Thread(target=monitor_pairs)
+    monitoring_thread.start()
+    
     # Run Flask server
     app.run(host="0.0.0.0", port=10000)
-
